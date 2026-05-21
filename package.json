@@ -1,0 +1,20 @@
+{
+  "name": "ad-link-share-system",
+  "version": "1.0.0",
+  "description": "Ad-based link sharing system",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js",
+    "dev": "nodemon api/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": ["ad", "link", "share", "monetization"],
+  "author": "Your Name",
+  "license": "MIT"
+}
