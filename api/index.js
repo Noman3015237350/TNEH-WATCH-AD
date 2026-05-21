@@ -1,13 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const crypto = require('crypto');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Store for created links (in production, use Redis or Database)
-const linkStore = new Map();
+// Your ad links
 const adLinks = [
   'https://omg10.com/4/10552102',
   'https://omg10.com/4/10520164',
@@ -21,212 +20,219 @@ const adLinks = [
   'https://omg10.com/4/10524009'
 ];
 
+// Store created links
+const linkStore = new Map();
+
 // Generate unique ID
 function generateId() {
-  return crypto.randomBytes(8).toString('hex');
+  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
 
-// Create share link endpoint
-app.post('/api/createlink', (req, res) => {
-  const { destinationUrl } = req.body;
-  
-  if (!destinationUrl) {
-    return res.status(400).json({ error: 'Destination URL is required' });
-  }
-
-  const linkId = generateId();
-  const randomAdLink = adLinks[Math.floor(Math.random() * adLinks.length)];
-  
-  const linkData = {
-    id: linkId,
-    destinationUrl,
-    adUrl: randomAdLink,
-    createdAt: Date.now(),
-    clicks: 0
-  };
-  
-  linkStore.set(linkId, linkData);
-  
+// API Root
+app.get('/api/', (req, res) => {
   res.json({
-    success: true,
-    shareLink: `https://tnehwatchad.onrender.com/l/${linkId}`,
-    linkId: linkId
+    status: 'active',
+    message: 'TNEH Ad Share Link System',
+    totalAds: adLinks.length,
+    endpoints: {
+      createLink: 'GET /api/createid',
+      generateLink: 'GET /api/Id=&generatelink',
+      getAd: 'GET /api/getad?id=ID'
+    }
   });
 });
 
-// Check endpoint - verifies if user has seen ad
-app.post('/api/check', (req, res) => {
-  const { linkId, adCompleted } = req.body;
+// Endpoint 1: /api/createid - Creates a new link ID
+app.get('/api/createid', (req, res) => {
+  const linkId = generateId();
+  const randomAd = adLinks[Math.floor(Math.random() * adLinks.length)];
   
-  if (!linkId) {
-    return res.status(400).json({ error: 'Link ID is required' });
-  }
+  linkStore.set(linkId, {
+    id: linkId,
+    adUrl: randomAd,
+    createdAt: Date.now(),
+    clicks: 0
+  });
   
-  const linkData = linkStore.get(linkId);
-  
-  if (!linkData) {
-    return res.status(404).json({ error: 'Link not found' });
-  }
-  
-  if (adCompleted) {
-    // User completed ad view, redirect to destination
-    linkData.clicks++;
-    linkStore.set(linkId, linkData);
-    
-    res.json({
-      success: true,
-      destinationUrl: linkData.destinationUrl,
-      message: 'Ad completed, redirecting...'
-    });
-  } else {
-    // Show ad first
-    res.json({
-      success: true,
-      showAd: true,
-      adUrl: linkData.adUrl,
-      message: 'Please view the ad to continue'
-    });
-  }
+  res.json({
+    success: true,
+    id: linkId,
+    adUrl: randomAd,
+    message: 'Use this ID to generate share link'
+  });
 });
 
-// Redirect endpoint for share links
-app.get('/l/:linkId', (req, res) => {
-  const { linkId } = req.params;
-  const linkData = linkStore.get(linkId);
+// Endpoint 2: /api/Id=&generatelink - Generate full link from ID
+app.get('/api/Id=&generatelink', (req, res) => {
+  const linkId = req.query.id;
   
-  if (!linkData) {
-    return res.status(404).send('Link not found');
+  if (!linkId) {
+    return res.json({
+      error: 'Please provide an ID',
+      example: '/api/Id=&generatelink?id=abc123'
+    });
   }
   
-  // Return HTML page with ad iframe/redirect
+  // Check if link exists
+  if (!linkStore.has(linkId)) {
+    // Create new entry if ID doesn't exist
+    const randomAd = adLinks[Math.floor(Math.random() * adLinks.length)];
+    linkStore.set(linkId, {
+      id: linkId,
+      adUrl: randomAd,
+      createdAt: Date.now(),
+      clicks: 0
+    });
+  }
+  
+  const shareLink = `https://tnehwatchad.onrender.com/api/getad?id=${linkId}`;
+  
+  res.json({
+    success: true,
+    shareLink: shareLink,
+    id: linkId,
+    adUrl: linkStore.get(linkId).adUrl,
+    message: 'Share this link with anyone!'
+  });
+});
+
+// Alternative: /api/generatelink?id=ID (cleaner version)
+app.get('/api/generatelink', (req, res) => {
+  const linkId = req.query.id;
+  
+  if (!linkId) {
+    return res.json({
+      error: 'Please provide an ID',
+      example: '/api/generatelink?id=abc123'
+    });
+  }
+  
+  if (!linkStore.has(linkId)) {
+    const randomAd = adLinks[Math.floor(Math.random() * adLinks.length)];
+    linkStore.set(linkId, {
+      id: linkId,
+      adUrl: randomAd,
+      createdAt: Date.now(),
+      clicks: 0
+    });
+  }
+  
+  const shareLink = `https://tnehwatchad.onrender.com/api/getad?id=${linkId}`;
+  
+  res.json({
+    success: true,
+    shareLink: shareLink,
+    id: linkId
+  });
+});
+
+// GET AD - Show ad when someone clicks share link
+app.get('/api/getad', (req, res) => {
+  const linkId = req.query.id;
+  
+  if (!linkId || !linkStore.has(linkId)) {
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Invalid Link</title></head>
+      <body style="font-family: Arial; text-align: center; margin-top: 50px;">
+        <h2>❌ Invalid Link</h2>
+        <p>This share link is not valid.</p>
+        <a href="https://tnehwatchad.onrender.com/">Create New Link</a>
+      </body>
+      </html>
+    `);
+  }
+  
+  const linkData = linkStore.get(linkId);
+  linkData.clicks++;
+  linkStore.set(linkId, linkData);
+  
+  // Show ad page
   res.send(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Redirecting...</title>
+      <title>Redirecting to Ad...</title>
       <meta name="viewport" content="width=device-width, initial-scale=1">
       <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-          font-family: Arial, sans-serif;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          min-height: 100vh;
           display: flex;
           justify-content: center;
           align-items: center;
-          min-height: 100vh;
-          margin: 0;
-          background: #f5f5f5;
         }
-        .container {
-          text-align: center;
+        .card {
           background: white;
-          padding: 2rem;
-          border-radius: 10px;
-          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+          border-radius: 20px;
+          padding: 40px;
+          text-align: center;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.3);
           max-width: 500px;
+          margin: 20px;
         }
-        .ad-container {
+        h1 { color: #333; margin-bottom: 10px; }
+        .timer {
+          font-size: 72px;
+          font-weight: bold;
+          color: #667eea;
           margin: 20px 0;
-          border: 1px solid #ddd;
-          border-radius: 5px;
-          overflow: hidden;
-        }
-        iframe {
-          width: 100%;
-          height: 300px;
-          border: none;
         }
         button {
-          background: #007bff;
+          background: #667eea;
           color: white;
           border: none;
-          padding: 10px 20px;
-          border-radius: 5px;
-          cursor: pointer;
+          padding: 12px 30px;
+          border-radius: 50px;
           font-size: 16px;
-          margin-top: 10px;
+          cursor: pointer;
+          margin-top: 20px;
+          transition: transform 0.3s;
         }
         button:hover {
-          background: #0056b3;
+          transform: scale(1.05);
+          background: #5a67d8;
         }
-        .hidden {
-          display: none;
-        }
-        .loading {
-          color: #666;
+        .info {
+          margin-top: 20px;
+          font-size: 12px;
+          color: #999;
+          word-break: break-all;
         }
       </style>
     </head>
     <body>
-      <div class="container">
-        <h2>Access Content</h2>
-        <p>Please view the ad to continue to your destination</p>
-        <div id="adContainer" class="ad-container">
-          <iframe id="adFrame" src="${linkData.adUrl}"></iframe>
+      <div class="card">
+        <h1>📢 Please View This Ad</h1>
+        <p>You will be redirected in</p>
+        <div class="timer" id="timer">5</div>
+        <button onclick="goNow()">Skip Wait →</button>
+        <div class="info">
+          ⭐ This helps support free content<br>
+          Redirecting to: <strong id="adUrl">${linkData.adUrl}</strong>
         </div>
-        <button id="continueBtn" onclick="checkAdCompletion()">
-          I have viewed the ad
-        </button>
-        <div id="loading" class="loading hidden">Verifying...</div>
       </div>
-
+      
       <script>
-        let adCompleted = false;
+        let timeLeft = 5;
+        const timerEl = document.getElementById('timer');
         
-        // Check if user has spent enough time on ad
-        let timerStarted = false;
-        let timeSpent = 0;
-        
-        const adFrame = document.getElementById('adFrame');
-        const continueBtn = document.getElementById('continueBtn');
-        const loading = document.getElementById('loading');
-        
-        adFrame.onload = function() {
-          if (!timerStarted) {
-            timerStarted = true;
-            // Start timer for ad viewing (5 seconds minimum)
-            setTimeout(() => {
-              adCompleted = true;
-              continueBtn.disabled = false;
-              continueBtn.style.opacity = '1';
-            }, 5000);
-          }
-        };
-        
-        async function checkAdCompletion() {
-          if (!adCompleted) {
-            alert('Please wait 5 seconds after the ad loads');
-            return;
-          }
+        const countdown = setInterval(() => {
+          timeLeft--;
+          timerEl.textContent = timeLeft;
           
-          loading.classList.remove('hidden');
-          continueBtn.disabled = true;
-          
-          try {
-            const response = await fetch('/api/check', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                linkId: '${linkId}',
-                adCompleted: true
-              })
-            });
-            
-            const data = await response.json();
-            
-            if (data.success && data.destinationUrl) {
-              window.location.href = data.destinationUrl;
-            } else {
-              alert('Error: Could not redirect');
-              loading.classList.add('hidden');
-              continueBtn.disabled = false;
-            }
-          } catch (error) {
-            console.error('Error:', error);
-            alert('An error occurred');
-            loading.classList.add('hidden');
-            continueBtn.disabled = false;
+          if (timeLeft <= 0) {
+            clearInterval(countdown);
+            window.location.href = '${linkData.adUrl}';
           }
+        }, 1000);
+        
+        function goNow() {
+          clearInterval(countdown);
+          window.location.href = '${linkData.adUrl}';
         }
       </script>
     </body>
@@ -234,37 +240,192 @@ app.get('/l/:linkId', (req, res) => {
   `);
 });
 
-// Get stats endpoint
-app.get('/api/stats/:linkId', (req, res) => {
-  const { linkId } = req.params;
-  const linkData = linkStore.get(linkId);
-  
+// Stats endpoint
+app.get('/api/stats/:id', (req, res) => {
+  const linkData = linkStore.get(req.params.id);
   if (!linkData) {
-    return res.status(404).json({ error: 'Link not found' });
+    return res.json({ error: 'Link not found' });
   }
-  
   res.json({
-    id: linkData.id,
+    linkId: linkData.id,
     clicks: linkData.clicks,
-    createdAt: linkData.createdAt
+    createdAt: new Date(linkData.createdAt).toLocaleString(),
+    adUrl: linkData.adUrl
   });
+});
+
+// Get random ad directly
+app.get('/api/random', (req, res) => {
+  const randomAd = adLinks[Math.floor(Math.random() * adLinks.length)];
+  res.redirect(randomAd);
 });
 
 // Get all links (admin)
 app.get('/api/links', (req, res) => {
-  const allLinks = Array.from(linkStore.values()).map(link => ({
-    id: link.id,
-    clicks: link.clicks,
-    createdAt: link.createdAt,
-    destinationPreview: link.destinationUrl.substring(0, 50)
-  }));
-  
+  const allLinks = Array.from(linkStore.values());
   res.json(allLinks);
+});
+
+// Homepage
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>TNEH Ad Share Link</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          min-height: 100vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+        .container {
+          background: white;
+          border-radius: 20px;
+          padding: 40px;
+          text-align: center;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+          max-width: 600px;
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 30px; }
+        .link-box {
+          background: #f7f7f7;
+          padding: 15px;
+          border-radius: 10px;
+          margin: 20px 0;
+          word-break: break-all;
+          font-family: monospace;
+        }
+        button {
+          background: #667eea;
+          color: white;
+          border: none;
+          padding: 15px 40px;
+          border-radius: 50px;
+          font-size: 18px;
+          cursor: pointer;
+          margin: 10px;
+          transition: transform 0.3s;
+        }
+        button:hover {
+          transform: scale(1.05);
+          background: #5a67d8;
+        }
+        .copy-btn {
+          background: #48bb78;
+        }
+        .copy-btn:hover {
+          background: #38a169;
+        }
+        .loading {
+          display: none;
+          margin: 20px;
+          color: #667eea;
+        }
+        .endpoint {
+          background: #eef2ff;
+          padding: 10px;
+          margin: 10px 0;
+          border-radius: 8px;
+          font-size: 12px;
+          font-family: monospace;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>🚀 TNEH Ad Share Link</h1>
+        <p class="subtitle">Create share links with ad monetization</p>
+        
+        <button id="createBtn" onclick="createShareLink()">✨ Create Share Link ✨</button>
+        
+        <div class="loading" id="loading">
+          Creating link... ⏳
+        </div>
+        
+        <div id="result" style="display: none;">
+          <h3>✅ Your Share Link:</h3>
+          <div class="link-box" id="shareLink"></div>
+          <button class="copy-btn" onclick="copyLink()">📋 Copy Link</button>
+          <p style="margin-top: 20px; font-size: 14px; color: #666;">
+            Share this link with anyone!<br>
+            They will see an ad before continuing.
+          </p>
+        </div>
+        
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+          <h4>📡 API Endpoints:</h4>
+          <div class="endpoint">GET /api/createid</div>
+          <div class="endpoint">GET /api/Id=&generatelink?id=YOUR_ID</div>
+          <div class="endpoint">GET /api/generatelink?id=YOUR_ID</div>
+          <div class="endpoint">GET /api/random</div>
+        </div>
+      </div>
+      
+      <script>
+        let currentLink = '';
+        
+        async function createShareLink() {
+          const btn = document.getElementById('createBtn');
+          const loading = document.getElementById('loading');
+          const result = document.getElementById('result');
+          
+          btn.disabled = true;
+          loading.style.display = 'block';
+          result.style.display = 'none';
+          
+          try {
+            // First, create an ID
+            const idResponse = await fetch('/api/createid');
+            const idData = await idResponse.json();
+            
+            if (idData.success) {
+              // Then generate the full link
+              const linkResponse = await fetch('/api/Id=&generatelink?id=' + idData.id);
+              const linkData = await linkResponse.json();
+              
+              if (linkData.success) {
+                currentLink = linkData.shareLink;
+                document.getElementById('shareLink').innerHTML = currentLink;
+                result.style.display = 'block';
+              } else {
+                alert('Error generating link');
+              }
+            } else {
+              alert('Error creating ID');
+            }
+          } catch (error) {
+            alert('Error: ' + error.message);
+          } finally {
+            btn.disabled = false;
+            loading.style.display = 'none';
+          }
+        }
+        
+        function copyLink() {
+          navigator.clipboard.writeText(currentLink);
+          alert('Link copied to clipboard! 📋');
+        }
+      </script>
+    </body>
+    </html>
+  `);
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(\`✅ Server running on port \${PORT}\`);
+  console.log(\`📍 Endpoints:\`);
+  console.log(\`   GET /api/createid\`);
+  console.log(\`   GET /api/Id=&generatelink?id=ID\`);
+  console.log(\`   GET /api/generatelink?id=ID\`);
+  console.log(\`📊 Visit: https://tnehwatchad.onrender.com\`);
 });
 
 module.exports = app;
