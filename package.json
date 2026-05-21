@@ -1,7 +1,7 @@
 {
-  "name": "tneh-ad-share-link",
+  "name": "tneh-ad-share-api",
   "version": "1.0.0",
-  "description": "Simple ad-based share link system",
+  "description": "TNEH Ad Share Link API - JSON only",
   "main": "api/index.js",
   "scripts": {
     "start": "node api/index.js"
@@ -10,7 +10,7 @@
     "express": "^4.18.2",
     "cors": "^2.8.5"
   },
-  "keywords": ["ad", "share", "link", "monetization"],
+  "keywords": ["ad", "share", "api", "link"],
   "author": "TNEH",
   "license": "MIT"
 }
