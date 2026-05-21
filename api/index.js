@@ -49,7 +49,7 @@ app.post('/api/createlink', (req, res) => {
   
   res.json({
     success: true,
-    shareLink: `https://yourdomain.com/l/${linkId}`,
+    shareLink: `https://tnehwatchad.onrender.com/l/${linkId}`,
     linkId: linkId
   });
 });
